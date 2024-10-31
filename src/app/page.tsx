@@ -65,7 +65,7 @@ export default function ChessRecorder() {
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
   const [authForm, setAuthForm] = useState<AuthFormData>({ email: '', password: '' });
-  const [isRegistering, setIsRegistering] = useState<boolean>(false);
+  const [boardWidth, setBoardWidth] = useState(500);
 
   const loadSavedMoves = useCallback(async () => {
     if (!user) return;
@@ -78,7 +78,7 @@ export default function ChessRecorder() {
       setSavedMoves(movesList);
     } catch (error) {
       console.error("Error loading saved moves:", error);
-      toast.error("保存された対局の読み込みに失敗しました");
+      toast.error("Failed to load saved games");
     }
   }, [user]);
 
@@ -96,36 +96,42 @@ export default function ChessRecorder() {
     return () => unsubscribe();
   }, [loadSavedMoves]);
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (isRegistering) {
-        await createUserWithEmailAndPassword(auth, authForm.email, authForm.password);
-        toast.success("アカウントを作成しました");
-      } else {
-        await signInWithEmailAndPassword(auth, authForm.email, authForm.password);
-        toast.success("ログインしました");
-      }
+      await signInWithEmailAndPassword(auth, authForm.email, authForm.password);
+      toast.success("Successfully logged in");
     } catch (error) {
-      console.error("Auth error:", error);
-      toast.error(isRegistering ? "アカウント作成に失敗しました" : "ログインに失敗しました");
+      console.error("Login error:", error);
+      toast.error("Login failed");
+    }
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createUserWithEmailAndPassword(auth, authForm.email, authForm.password);
+      toast.success("Account created successfully");
+    } catch (error) {
+      console.error("Signup error:", error);
+      toast.error("Failed to create account");
     }
   };
 
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-      toast.success("ログアウトしました");
+      toast.success("Successfully logged out");
     } catch (error) {
       console.error("Sign out error:", error);
-      toast.error("ログアウトに失敗しました");
+      toast.error("Failed to log out");
     }
   };
 
   const stopRecording = useCallback(() => {
     setIsRecording(false);
     setIsTimerRunning(false);
-    toast.success("録画を停止しました");
+    toast.success("Recording stopped");
   }, []);
 
   const onDrop = useCallback((sourceSquare: Square, targetSquare: Square) => {
@@ -150,7 +156,7 @@ export default function ChessRecorder() {
           spread: 70,
           origin: { y: 0.6 }
         });
-        toast.success("チェックメイト！");
+        toast.success("Checkmate!");
         stopRecording();
       } else if (game.isDraw()) {
         stopRecording();
@@ -159,7 +165,7 @@ export default function ChessRecorder() {
       return true;
     } catch (error) {
       console.error("Invalid move:", error);
-      toast.error("無効な手です");
+      toast.error("Invalid move");
       return false;
     }
   }, [game, isRecording, stopRecording]);
@@ -194,7 +200,7 @@ export default function ChessRecorder() {
     setCurrentView('record');
     setTimer(0);
     setIsTimerRunning(true);
-    toast.success("録画を開始しました");
+    toast.success("Recording started");
   }, []);
 
   const replayPrevMove = useCallback(() => {
@@ -211,11 +217,11 @@ export default function ChessRecorder() {
 
   const saveMoves = useCallback(async () => {
     if (!user) {
-      toast.error('ログインが必要です');
+      toast.error('Login required');
       return;
     }
     if (title.trim() === '') {
-      toast.error('タイトルを入力してください');
+      toast.error('Please enter a title');
       return;
     }
     try {
@@ -229,10 +235,10 @@ export default function ChessRecorder() {
       setTitle('');
       loadSavedMoves();
       setCurrentView('list');
-      toast.success("対局を保存しました");
+      toast.success("Game saved successfully");
     } catch (e) {
       console.error('Error adding document: ', e);
-      toast.error("対局の保存に失敗しました");
+      toast.error("Failed to save game");
     }
   }, [title, recordedMoves, loadSavedMoves, timer, user]);
 
@@ -246,22 +252,22 @@ export default function ChessRecorder() {
         setReplayGame(new Chess());
         setCurrentView('replay');
       } else {
-        toast.error("対局データが見つかりません");
+        toast.error("Game not found");
       }
     } catch (error) {
       console.error("Error loading replay:", error);
-      toast.error("対局の読み込みに失敗しました");
+      toast.error("Failed to load game");
     }
   }, []);
 
   const deleteReplay = useCallback(async (id: string) => {
     try {
       await deleteDoc(doc(db, 'chessMoves', id));
-      toast.success("対局を削除しました");
+      toast.success("Game deleted");
       loadSavedMoves();
     } catch (error) {
       console.error("Error deleting replay:", error);
-      toast.error("対局の削除に失敗しました");
+      toast.error("Failed to delete game");
     }
   }, [loadSavedMoves]);
 
@@ -288,21 +294,36 @@ export default function ChessRecorder() {
     })
   };
 
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      if (width <= 768) {
+        setBoardWidth(Math.min(width - 64, 280));
+      } else {
+        setBoardWidth(500);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
-    <div className="min-h-screen bg-[#1a0f00] p-8">
+    <div className="min-h-screen bg-[#080b14] p-8">
       <Toaster position="top-center" />
       <div className="max-w-6xl mx-auto">
         <header className="text-center mb-8 relative">
-          <h1 className="text-4xl font-serif text-amber-100 mb-2 tracking-wide">チェスマスター</h1>
-          <p className="text-amber-200/80 font-light">対局を録画・再生</p>
+          <h1 className="text-4xl font-serif text-blue-100 mb-2 tracking-wide">Chess Master</h1>
+          <p className="text-blue-200/80 font-light">Record and Replay Games</p>
           {user && (
-            <div className="absolute right-0 top-0 flex items-center gap-2 text-amber-100">
-              <span className="text-sm">{user.email}</span>
+            <div className="absolute right-0 top-0 flex items-center gap-2 text-blue-100">
+              {/* <span className="text-sm">{user.email}</span> */}
               <Button
                 onClick={handleSignOut}
                 variant="ghost"
                 size="sm"
-                className="text-amber-100 hover:bg-amber-900/50"
+                className="text-blue-100 hover:bg-blue-900/50"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -322,46 +343,49 @@ export default function ChessRecorder() {
               x: { type: "spring", stiffness: 300, damping: 30 },
               opacity: { duration: 0.2 }
             }}
-            className="bg-black/40 backdrop-blur-sm rounded-lg border border-amber-900/30 p-8"
+            className="bg-black/40 backdrop-blur-sm rounded-lg border border-blue-900/30 p-8"
           >
             {currentView === 'auth' && (
               <div className="max-w-md mx-auto space-y-6">
-                <h2 className="text-2xl font-serif text-amber-100 text-center mb-6">
-                  {isRegistering ? 'アカウント作成' : 'ログイン'}
+                <h2 className="text-2xl font-serif text-blue-100 text-center mb-6">
+                  Login / Sign Up
                 </h2>
-                <form onSubmit={handleAuth} className="space-y-4">
+                <form className="space-y-4">
                   <div>
                     <Input
                       type="email"
-                      placeholder="メールアドレス"
+                      placeholder="Email"
                       value={authForm.email}
                       onChange={(e) => setAuthForm(prev => ({ ...prev, email: e.target.value }))}
-                      className="bg-black/20 border-amber-900/30 text-amber-100 placeholder:text-amber-100/50"
+                      className="bg-black/20 border-blue-900/30 text-blue-100 placeholder:text-blue-100/50"
                     />
                   </div>
                   <div>
                     <Input
                       type="password"
-                      placeholder="パスワード"
+                      placeholder="Password"
                       value={authForm.password}
                       onChange={(e) => setAuthForm(prev => ({ ...prev, password: e.target.value }))}
-                      className="bg-black/20 border-amber-900/30 text-amber-100 placeholder:text-amber-100/50"
+                      className="bg-black/20 border-blue-900/30 text-blue-100 placeholder:text-blue-100/50"
                     />
                   </div>
-                  <Button
-                    type="submit"
-                    className="w-full bg-amber-900 hover:bg-amber-800 text-amber-100 border border-amber-700"
-                  >
-                    {isRegistering ? 'アカウント作成' : 'ログイン'}
-                  </Button>
+                  <div className="flex space-x-4">
+                    <Button
+                      type="button"
+                      onClick={handleLogin}
+                      className="flex-1 bg-blue-900 hover:bg-blue-800 text-blue-100 border border-blue-700"
+                    >
+                      Login
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleSignup}
+                      className="flex-1 bg-blue-700 hover:bg-blue-600 text-blue-100 border border-blue-500"
+                    >
+                      Sign Up
+                    </Button>
+                  </div>
                 </form>
-                <Button
-                  variant="ghost"
-                  onClick={() => setIsRegistering(!isRegistering)}
-                  className="w-full text-amber-100 hover:bg-amber-900/50"
-                >
-                  {isRegistering ? 'ログインする' : 'アカウントを作成する'}
-                </Button>
               </div>
             )}
 
@@ -369,33 +393,33 @@ export default function ChessRecorder() {
               <div className="space-y-6">
                 <Button 
                   onClick={startRecording} 
-                  className="w-full bg-amber-900 hover:bg-amber-800 text-amber-100 border border-amber-700 shadow-lg transition-all duration-200"
+                  className="w-full bg-blue-900 hover:bg-blue-800 text-blue-100 border border-blue-700 shadow-lg transition-all duration-200"
                 >
-                  <PlayCircle className="mr-2 h-5 w-5" /> 新規録画開始
+                  <PlayCircle className="mr-2 h-5 w-5" /> Start New Recording
                 </Button>
-                <h2 className="text-2xl font-serif text-amber-100 border-b border-amber-900/50 pb-2">保存された対局</h2>
+                <h2 className="text-2xl font-serif text-blue-100 border-b border-blue-900/50 pb-2">Saved Games</h2>
                 <div className="grid gap-4 md:grid-cols-2">
                   {savedMoves.map(move => (
-                    <div key={move.id} className="bg-black/20 border border-amber-900/30 rounded-lg p-4 hover:border-amber-700/50 transition-colors">
-                      <h3 className="font-serif text-xl text-amber-100">{move.title}</h3>
-                      <p className="text-sm text-amber-200/60">{new Date(move.createdAt.seconds * 1000).toLocaleString()}</p>
-                      <div className="flex justify-between items-center mt-3 text-amber-100/80">
+                    <div key={move.id} className="bg-black/20 border border-blue-900/30 rounded-lg p-4 hover:border-blue-700/50 transition-colors">
+                      <h3 className="font-serif text-xl text-blue-100">{move.title}</h3>
+                      <p className="text-sm text-blue-200/60">{new Date(move.createdAt.seconds * 1000).toLocaleString()}</p>
+                      <div className="flex justify-between items-center mt-3 text-blue-100/80">
                         <span className="flex items-center">
                           <Clock className="mr-1 h-4 w-4" />
                           {formatTime(move.duration)}
                         </span>
                         <span className="flex items-center">
                           <Award className="mr-1 h-4 w-4" />
-                          {move.moves.length} 手
+                          {move.moves.length} moves
                         </span>
                       </div>
                       <div className="flex justify-between mt-4">
                         <Button 
                           onClick={() => loadReplay(move.id)} 
-                          className="bg-amber-900/80 hover:bg-amber-800 text-amber-100 border border-amber-700/50"
+                          className="bg-blue-900/80 hover:bg-blue-800 text-blue-100 border border-blue-700/50"
                           size="sm"
                         >
-                          再生
+                         再生
                         </Button>
                         <Button 
                           onClick={() => deleteReplay(move.id)} 
@@ -418,30 +442,30 @@ export default function ChessRecorder() {
                   <Button 
                     onClick={() => setCurrentView('list')} 
                     variant="ghost" 
-                    className="text-amber-100 hover:bg-amber-900/50"
+                    className="text-blue-100 hover:bg-blue-900/50"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </Button>
-                  <h2 className="text-2xl font-serif text-amber-100">
-                    {currentView === 'record' ? '録画中' : '再生中'}
+                  <h2 className="text-2xl font-serif text-blue-100">
+                    {currentView === 'record' ? 'Recording' : 'Replaying'}
                   </h2>
-                  <div className="text-lg text-amber-100">
+                  <div className="text-lg text-blue-100">
                     <Clock className="inline-block mr-2 h-5 w-5" />
                     {formatTime(currentView === 'record' ? timer : (selectedReplay?.duration || 0))}
                   </div>
                 </div>
 
                 <div className="flex justify-center">
-                  <div className="rounded-lg overflow-hidden shadow-2xl">
+                  <div className="rounded-lg overflow-hidden shadow-2xl max-w-full w-full flex justify-center p-1">
                     <Chessboard 
                       position={currentView === 'record' ? game.fen() : replayGame.fen()} 
                       onPieceDrop={currentView === 'record' ? onDrop : () => false}
-                      boardWidth={500}
-                      customDarkSquareStyle={{ backgroundColor: '#4b2810' }}
-                      customLightSquareStyle={{ backgroundColor: '#deb887' }}
-                      customDropSquareStyle={{ boxShadow: 'inset 0 0 1px 4px rgba(218, 165, 32, 0.75)' }}
-                      customPremoveDarkSquareStyle={{ backgroundColor: '#3d2008' }}
-                      customPremoveLightSquareStyle={{ backgroundColor: '#be8f60' }}
+                      boardWidth={boardWidth}
+                      customDarkSquareStyle={{ backgroundColor: '#1a237e' }}
+                      customLightSquareStyle={{ backgroundColor: '#283593' }}
+                      customDropSquareStyle={{ boxShadow: 'inset 0 0 1px 4px rgba(66, 165, 245, 0.75)' }}
+                      customPremoveDarkSquareStyle={{ backgroundColor: '#0d47a1' }}
+                      customPremoveLightSquareStyle={{ backgroundColor: '#1565c0' }}
                       animationDuration={200}
                     />
                   </div>
@@ -451,25 +475,25 @@ export default function ChessRecorder() {
                   {currentView === 'record' ? (
                     <Button 
                       onClick={stopRecording} 
-                      className="bg-red-900 hover:bg-red-800 text-amber-100 border border-red-800"
+                      className="bg-red-900 hover:bg-red-800 text-blue-100 border border-red-800"
                     >
-                      <StopCircle className="mr-2 h-5 w-5" /> 録画停止
+                      <StopCircle className="mr-2 h-5 w-5" /> Stop Recording
                     </Button>
                   ) : (
                     <>
                       <Button 
                         onClick={replayPrevMove} 
                         disabled={currentReplayMove === 0}
-                        className="bg-amber-900 hover:bg-amber-800 text-amber-100 border border-amber-700 disabled:opacity-50"
+                        className="bg-blue-900 hover:bg-blue-800 text-blue-100 border border-blue-700 disabled:opacity-50"
                       >
-                        <Rewind className="mr-2 h-5 w-5" /> 前の手
+                        <Rewind className="mr-2 h-5 w-5" /> Previous
                       </Button>
                       <Button 
                         onClick={replayNextMove}
                         disabled={!selectedReplay || currentReplayMove === selectedReplay.moves.length}
-                        className="bg-amber-900 hover:bg-amber-800 text-amber-100 border border-amber-700 disabled:opacity-50"
+                        className="bg-blue-900 hover:bg-blue-800 text-blue-100 border border-blue-700 disabled:opacity-50"
                       >
-                        次の手 <FastForward className="ml-2 h-5 w-5" />
+                        Next <FastForward className="ml-2 h-5 w-5" />
                       </Button>
                     </>
                   )}
@@ -479,25 +503,25 @@ export default function ChessRecorder() {
                   <div className="flex items-center space-x-3">
                     <Input
                       type="text"
-                      placeholder="対局のタイトル"
+                      placeholder="Game Title"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      className="flex-grow bg-black/20 border-amber-900/30 text-amber-100 placeholder:text-amber-100/50"
+                      className="flex-grow bg-black/20 border-blue-900/30 text-blue-100 placeholder:text-blue-100/50"
                     />
                     <Button 
                       onClick={saveMoves} 
-                      className="bg-amber-900 hover:bg-amber-800 text-amber-100 border border-amber-700"
+                      className="bg-blue-900 hover:bg-blue-800 text-blue-100 border border-blue-700"
                     >
-                      <Save className="mr-2 h-5 w-5" /> 保存
+                      <Save className="mr-2 h-5 w-5" /> Save
                     </Button>
                   </div>
                 )}
 
-                <div className="text-center text-lg text-amber-100">
+                <div className="text-center text-lg text-blue-100">
                   {currentView === 'record' ? (
-                    <p>現在録画中: {recordedMoves.length} 手目</p>
+                    <p>Recording: Move {recordedMoves.length}</p>
                   ) : (
-                    <p>再生中: {currentReplayMove} / {selectedReplay?.moves.length} 手目</p>
+                    <p>Replay: Move {currentReplayMove} / {selectedReplay?.moves.length}</p>
                   )}
                 </div>
               </div>
