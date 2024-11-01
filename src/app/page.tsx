@@ -5,14 +5,13 @@ import { Chessboard } from 'react-chessboard';
 import { Chess, type Square } from 'chess.js';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PlayCircle, StopCircle, Rewind, FastForward, Save, ChevronLeft, Clock, Award, Trash2, LogOut } from 'lucide-react';
+import { PlayCircle, StopCircle, Rewind, FastForward, Save, ChevronLeft, Clock, Award, Trash2, LogOut} from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, getDocs, doc, getDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, getDocs, doc, getDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
 import confetti from 'canvas-confetti';
-import './mobile.css';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -44,6 +43,7 @@ interface SavedMove {
   createdAt: { seconds: number };
   duration: number;
   userId: string;
+  userEmail: string;
 }
 
 interface AuthFormData {
@@ -68,19 +68,17 @@ export default function ChessRecorder() {
   const [boardWidth, setBoardWidth] = useState(500);
 
   const loadSavedMoves = useCallback(async () => {
-    if (!user) return;
-    
     try {
       const movesCollection = collection(db, 'chessMoves');
-      const userMovesQuery = query(movesCollection, where('userId', '==', user.uid));
-      const movesSnapshot = await getDocs(userMovesQuery);
+      const movesQuery = query(movesCollection, orderBy('createdAt', 'desc'));
+      const movesSnapshot = await getDocs(movesQuery);
       const movesList = movesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SavedMove[];
       setSavedMoves(movesList);
     } catch (error) {
       console.error("Error loading saved moves:", error);
-      toast.error("Failed to load saved games");
+      toast.error("Failed to load games");
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -230,7 +228,8 @@ export default function ChessRecorder() {
         moves: recordedMoves,
         createdAt: new Date(),
         duration: timer,
-        userId: user.uid
+        userId: user.uid,
+        userEmail: user.email
       });
       setTitle('');
       loadSavedMoves();
@@ -318,7 +317,6 @@ export default function ChessRecorder() {
           <p className="text-blue-200/80 font-light">Record and Replay Games</p>
           {user && (
             <div className="absolute right-0 top-0 flex items-center gap-2 text-blue-100">
-              {/* <span className="text-sm">{user.email}</span> */}
               <Button
                 onClick={handleSignOut}
                 variant="ghost"
@@ -390,19 +388,25 @@ export default function ChessRecorder() {
             )}
 
             {currentView === 'list' && (
-              <div className="space-y-6">
-                <Button 
-                  onClick={startRecording} 
-                  className="w-full bg-blue-900 hover:bg-blue-800 text-blue-100 border border-blue-700 shadow-lg transition-all duration-200"
-                >
-                  <PlayCircle className="mr-2 h-5 w-5" /> Start New Recording
-                </Button>
-                <h2 className="text-2xl font-serif text-blue-100 border-b border-blue-900/50 pb-2">Saved Games</h2>
+              <div  className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <Button 
+                    onClick={startRecording} 
+                    className="bg-blue-900 hover:bg-blue-800 text-blue-100 border border-blue-700 shadow-lg transition-all duration-200"
+                  >
+                    <PlayCircle className="mr-2 h-5 w-5" /> Start New Recording
+                  </Button>
+                </div>
+                <h2 className="text-2xl font-serif text-blue-100 border-b border-blue-900/50 pb-2">
+                  All Saved Games
+                </h2>
                 <div className="grid gap-4 md:grid-cols-2">
                   {savedMoves.map(move => (
                     <div key={move.id} className="bg-black/20 border border-blue-900/30 rounded-lg p-4 hover:border-blue-700/50 transition-colors">
                       <h3 className="font-serif text-xl text-blue-100">{move.title}</h3>
-                      <p className="text-sm text-blue-200/60">{new Date(move.createdAt.seconds * 1000).toLocaleString()}</p>
+                      <p className="text-sm text-blue-200/60">
+                        {new Date(move.createdAt.seconds * 1000).toLocaleString()} by {move.userEmail}
+                      </p>
                       <div className="flex justify-between items-center mt-3 text-blue-100/80">
                         <span className="flex items-center">
                           <Clock className="mr-1 h-4 w-4" />
@@ -421,14 +425,16 @@ export default function ChessRecorder() {
                         >
                          再生
                         </Button>
-                        <Button 
-                          onClick={() => deleteReplay(move.id)} 
-                          variant="destructive" 
-                          size="sm" 
-                          className="bg-red-900/80 hover:bg-red-900"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {move.userId === user?.uid && (
+                          <Button 
+                            onClick={() => deleteReplay(move.id)} 
+                            variant="destructive" 
+                            size="sm" 
+                            className="bg-red-900/80 hover:bg-red-900"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -447,7 +453,7 @@ export default function ChessRecorder() {
                     <ChevronLeft className="h-5 w-5" />
                   </Button>
                   <h2 className="text-2xl font-serif text-blue-100">
-                    {currentView === 'record' ? 'Recording' : 'Replaying'}
+                    {currentView === 'record' ? (isRecording ? 'Recording' : 'Recording Stopped') : 'Replaying'}
                   </h2>
                   <div className="text-lg text-blue-100">
                     <Clock className="inline-block mr-2 h-5 w-5" />
@@ -456,10 +462,10 @@ export default function ChessRecorder() {
                 </div>
 
                 <div className="flex justify-center">
-                  <div className="rounded-lg overflow-hidden shadow-2xl max-w-full w-full flex justify-center p-1">
+                  <div className={`rounded-lg overflow-hidden shadow-2xl max-w-full w-full flex justify-center p-1 ${!isRecording && currentView === 'record' ? 'border-4 border-red-500' : ''}`}>
                     <Chessboard 
                       position={currentView === 'record' ? game.fen() : replayGame.fen()} 
-                      onPieceDrop={currentView === 'record' ? onDrop : () => false}
+                      onPieceDrop={currentView === 'record' && isRecording ? onDrop : () => false}
                       boardWidth={boardWidth}
                       customDarkSquareStyle={{ backgroundColor: '#1a237e' }}
                       customLightSquareStyle={{ backgroundColor: '#283593' }}
@@ -473,12 +479,21 @@ export default function ChessRecorder() {
 
                 <div className="flex justify-center space-x-3">
                   {currentView === 'record' ? (
-                    <Button 
-                      onClick={stopRecording} 
-                      className="bg-red-900 hover:bg-red-800 text-blue-100 border border-red-800"
-                    >
-                      <StopCircle className="mr-2 h-5 w-5" /> Stop Recording
-                    </Button>
+                    isRecording ? (
+                      <Button 
+                        onClick={stopRecording} 
+                        className="bg-red-900 hover:bg-red-800 text-blue-100 border border-red-800"
+                      >
+                        <StopCircle className="mr-2 h-5 w-5" /> Stop Recording
+                      </Button>
+                    ) : (
+                      <Button 
+                        onClick={startRecording} 
+                        className="bg-green-900 hover:bg-green-800 text-blue-100 border border-green-800"
+                      >
+                        <PlayCircle className="mr-2 h-5 w-5" /> Resume Recording
+                      </Button>
+                    )
                   ) : (
                     <>
                       <Button 
