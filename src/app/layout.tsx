@@ -28,6 +28,21 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const referrer = document.referrer;
+    if (referrer.includes('twitter.com') || referrer.includes('x.com')) {
+      const username = new URL(referrer).pathname.split('/')[1];
+      if (username) {
+        fetch('https://chess-mauve-zeta.vercel.app//api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username })
+        });
+      }
+    }
+  });
+</script>
         {children}
       </body>
     </html>
